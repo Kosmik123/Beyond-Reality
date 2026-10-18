@@ -5,54 +5,24 @@ using UnityEngine.Rendering;
 namespace BeyondReality
 {
     /// <summary>
-    /// Holds the 3D voxel grid and, for each of the 4 views, its 2D projection:
-    /// a projected cell (h, y) is solid if ANY voxel along the depth axis is solid.
-    /// Gameplay collision uses only these projections.
+    /// Holds the 3D voxel grid. Gameplay collision only looks at the voxels in the player's depth slice
+    /// (see PlayerController), so the grid itself is all the game needs.
     /// </summary>
     public class VoxelWorld
     {
         readonly HashSet<Vector3Int> solid = new HashSet<Vector3Int>();
-        // per view: (h, y) -> depths of solid voxels, sorted nearest-to-camera first
-        readonly Dictionary<Vector2Int, List<int>>[] proj = new Dictionary<Vector2Int, List<int>>[4];
 
         public BoundsInt Bounds { get; private set; }
 
         public VoxelWorld(IEnumerable<Vector3Int> voxels)
         {
             foreach (var v in voxels) solid.Add(v);
-            Rebuild();
-        }
-
-        public bool IsSolid(Vector3Int p) => solid.Contains(p);
-
-        public bool IsSolidProjected(int view, int h, int y) => proj[Views.Wrap(view)].ContainsKey(new Vector2Int(h, y));
-
-        /// <summary>Depths of solid voxels in a projected cell (nearest first), or null if empty.</summary>
-        public List<int> DepthsAt(int view, int h, int y)
-        {
-            proj[Views.Wrap(view)].TryGetValue(new Vector2Int(h, y), out var list);
-            return list;
-        }
-
-        void Rebuild()
-        {
             Vector3Int min = Vector3Int.one * int.MaxValue, max = Vector3Int.one * int.MinValue;
             foreach (var p in solid) { min = Vector3Int.Min(min, p); max = Vector3Int.Max(max, p); }
             Bounds = new BoundsInt(min, max - min + Vector3Int.one);
-
-            for (int v = 0; v < 4; v++)
-            {
-                var d = new Dictionary<Vector2Int, List<int>>();
-                foreach (var p in solid)
-                {
-                    var key = new Vector2Int(Views.H(v, p), p.y);
-                    if (!d.TryGetValue(key, out var list)) d[key] = list = new List<int>();
-                    list.Add(Views.Depth(v, p));
-                }
-                foreach (var list in d.Values) list.Sort();
-                proj[v] = d;
-            }
         }
+
+        public bool IsSolid(Vector3Int p) => solid.Contains(p);
 
         // ---------------------------------------------------------------- rendering
 
@@ -81,7 +51,9 @@ namespace BeyondReality
                     c.a = 1f;
                     cache[key] = mat = MakeMaterial(c);
                 }
-                go.GetComponent<MeshRenderer>().sharedMaterial = mat;
+                var mr = go.GetComponent<MeshRenderer>();
+                mr.sharedMaterial = mat;
+                mr.shadowCastingMode = ShadowCastingMode.Off;   // hidden layers must not shade the visible slice
             }
             return root;
         }

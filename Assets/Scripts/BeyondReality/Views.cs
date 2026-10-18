@@ -28,5 +28,12 @@ namespace BeyondReality
 
         /// <summary>World position from projected coordinates (y is passed through).</summary>
         public static Vector3 ToWorld(int v, float h, float depth, float y) => Right(v) * h + Forward(v) * depth + Vector3.up * y;
+
+        /// <summary>Voxel at integer projected coordinates (h, depth) and height y.</summary>
+        public static Vector3Int ToVoxel(int v, int h, int depth, int y)
+        {
+            var r = R[Wrap(v)]; var f = F[Wrap(v)];
+            return new Vector3Int(r.x * h + f.x * depth, y, r.y * h + f.y * depth);
+        }
     }
 }

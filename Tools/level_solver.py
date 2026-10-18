@@ -7,10 +7,11 @@ and how many view rotations each one needs (0 = obtainable without rotating).
 Usage:  python Tools/level_solver.py [path/to/Level.cs]
 
 Movement model (must stay conservative vs. PlayerController):
-  walk 1 column; jump +1 up and up to 2 columns sideways; jump +2 up and 1 column sideways;
-  fall straight down; rotate view only while standing, refused if the player would overlap
-  a projected block. Depth snap: keep current depth if a voxel is under the player, else the
-  voxel nearest the camera.
+  the player collides only with voxels in its own depth slice (everything in front or behind is ignored);
+  walk 1 column (fits a 1-high tunnel); jumps (jumpApex 3.2): +3 up 1 column, +2 up 2 columns,
+  +1 up 3 columns, level over a 2-column gap; every jump needs one free row of headroom above
+  the landing height, at the take-off column and along the path; fall straight down; rotate view only while standing: the new slice is the player's current voxel
+  column, then the player falls onto the ground of that slice. Coins count only in the player's voxel.
 """
 import re, sys
 from collections import deque
@@ -18,7 +19,7 @@ from pathlib import Path
 
 RIGHT = [(1, 0), (0, -1), (-1, 0), (0, 1)]   # view 0 looks +Z (north)
 FWD   = [(0, 1), (1, 0), (0, -1), (-1, 0)]
-JUMPS = ((0, 1), (1, 2), (2, 1))             # (height gain, max columns)
+JUMPS = ((0, 3), (1, 3), (2, 2), (3, 1))     # (height gain, max columns); walking is separate
 dot = lambda x, z, v: x * v[0] + z * v[1]
 
 def parse(path):
@@ -41,41 +42,42 @@ def voxels(boxes):
     return b
 
 def solve(blocks, coins, start, allow_rot=True):
-    proj = []
-    for v in range(4):
-        d = {}
-        for x, y, z in blocks:
-            d.setdefault((dot(x, z, RIGHT[v]), y), []).append(dot(x, z, FWD[v]))
-        for k in d: d[k].sort()
-        proj.append(d)
+    def solid(v, h, y, d):
+        x = RIGHT[v][0] * h + FWD[v][0] * d; z = RIGHT[v][1] * h + FWD[v][1] * d
+        return (x, y, z) in blocks
+    def world(v, h, y, d):
+        return (RIGHT[v][0] * h + FWD[v][0] * d, y, RIGHT[v][1] * h + FWD[v][1] * d)
     miny = min(y for _, y, _ in blocks) - 3
+    def land(v, h, r, d):
+        while not solid(v, h, r - 1, d) and r > miny: r -= 1
+        return r if r > miny else None
+    coin_at = {c: i for i, c in enumerate(coins)}
     dist = {start: 0}; q = deque([start]); got = {}
     while q:
-        s = q.popleft(); v, h, r, d = s; P = proj[v]; cd = dist[s]
-        for i, c in enumerate(coins):
-            if (dot(c[0], c[2], RIGHT[v]), c[1]) == (h, r):
-                got[i] = min(got.get(i, 99), cd)
+        s = q.popleft(); v, h, r, d = s; cd = dist[s]
+        i = coin_at.get(world(v, h, r, d))
+        if i is not None: got[i] = min(got.get(i, 99), cd)
         nxt = []
         if allow_rot:
+            x, _, z = world(v, h, r, d)
             for dv in (1, 3):
                 v2 = (v + dv) % 4
-                x = RIGHT[v][0] * h + FWD[v][0] * d; z = RIGHT[v][1] * h + FWD[v][1] * d
                 h2, d2 = dot(x, z, RIGHT[v2]), dot(x, z, FWD[v2])
-                if (h2, r) not in proj[v2]:
-                    ds = proj[v2].get((h2, r - 1))
-                    if ds and d2 not in ds: d2 = ds[0]
-                    nxt.append(((v2, h2, r, d2), 1))
+                if solid(v2, h2, r, d2): continue
+                r2 = land(v2, h2, r, d2)
+                if r2 is not None: nxt.append(((v2, h2, r2, d2), 1))
+        for dh in (-1, 1):                                    # walk (and step off ledges)
+            if not solid(v, h + dh, r, d):
+                rr = land(v, h + dh, r, d)
+                if rr is not None: nxt.append(((v, h + dh, rr, d), 0))
         for k, md in JUMPS:
+            if any(solid(v, h, r + i, d) for i in range(1, k + 2)): continue
             for dh in range(-md, md + 1):
                 if dh == 0: continue
                 st = 1 if dh > 0 else -1
-                if any((h, r + i) in P for i in range(1, k + 1)): continue
-                if any((h + st * i, r + k) in P for i in range(1, abs(dh) + 1)): continue
-                hh, rr = h + dh, r + k
-                while (hh, rr - 1) not in P and rr > miny: rr -= 1
-                if rr <= miny: continue
-                ds = P[(hh, rr - 1)]
-                nxt.append(((v, hh, rr, d if d in ds else ds[0]), 0))
+                if any(solid(v, h + st * i, r + j, d) for i in range(1, abs(dh) + 1) for j in (k, k + 1)): continue
+                rr = land(v, h + dh, r + k, d)
+                if rr is not None: nxt.append(((v, h + dh, rr, d), 0))
         for n, w in nxt:
             nd = cd + w
             if nd < dist.get(n, 99):

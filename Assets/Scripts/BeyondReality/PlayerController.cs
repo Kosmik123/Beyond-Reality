@@ -1,10 +1,10 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace BeyondReality
 {
     /// <summary>
-    /// 2D platformer physics on the projection of the voxel world for the current view.
+    /// 2D platformer physics on a single depth slice of the voxel world for the current view:
+    /// only voxels at the player's depth are solid, everything in front or behind is ignored.
     /// State: h (horizontal screen coordinate), y (feet height), depth (integer, along camera forward).
     /// Voxel (x,y,z) occupies [x-0.5, x+0.5] etc., so a block's top surface is at y + 0.5.
     /// </summary>
@@ -13,7 +13,7 @@ namespace BeyondReality
         [Header("Movement")]
         public float moveSpeed = 5.5f;
         public float gravity = 32f;
-        public float jumpApex = 2.4f;      // blocks; the level design assumes you can climb 2 blocks
+        public float jumpApex = 3.2f;      // blocks; the level design assumes you can climb 3 blocks
         public float maxFallSpeed = 20f;
         public float coyoteTime = 0.08f;
         public float jumpBuffer = 0.12f;
@@ -81,22 +81,23 @@ namespace BeyondReality
 
             MoveX(vel.x * dt);
             MoveY(vel.y * dt);
-            ResolveDepth();
+            UpdateSafeSpot();
 
             if (Y < -6f) Respawn();
         }
 
         static int Cell(float c) => Mathf.FloorToInt(c + 0.5f);
 
-        bool Solid(int i, int j) => world.IsSolidProjected(View, i, j);
+        bool Solid(int i, int j) => SolidIn(View, i, DepthCoord, j);
+        bool SolidIn(int view, int i, int depth, int j) => world.IsSolid(Views.ToVoxel(view, i, depth, j));
 
-        public bool Overlaps(int view, float h, float y)
+        public bool Overlaps(int view, float h, int depth, float y)
         {
             int i0 = Cell(h - HalfWidth + Eps), i1 = Cell(h + HalfWidth - Eps);
             int j0 = Cell(y + Eps), j1 = Cell(y + Height - Eps);
             for (int i = i0; i <= i1; i++)
                 for (int j = j0; j <= j1; j++)
-                    if (world.IsSolidProjected(view, i, j)) return true;
+                    if (SolidIn(view, i, depth, j)) return true;
             return false;
         }
 
@@ -144,26 +145,11 @@ namespace BeyondReality
             Y = ny;
         }
 
-        /// <summary>
-        /// The FEZ trick: when standing on something, move the player along the (invisible) depth axis
-        /// onto a voxel that is actually under them. Prefer the current depth, else the one nearest the camera.
-        /// </summary>
-        void ResolveDepth()
+        /// <summary>Remember the spot as a respawn point while standing squarely on a block.</summary>
+        void UpdateSafeSpot()
         {
-            if (!Grounded) return;
-            int row = Cell(Y - 0.05f);
-            int center = Cell(H);
-            int col = center;
-            if (!Solid(col, row))
-            {
-                col = Cell(H - HalfWidth + Eps);
-                if (!Solid(col, row)) col = Cell(H + HalfWidth - Eps);
-            }
-            List<int> depths = world.DepthsAt(View, col, row);
-            if (depths == null) return;
-            if (!depths.Contains(DepthCoord)) DepthCoord = depths[0];
-
-            if (col == center) { safeWorld = Views.ToWorld(View, Mathf.Round(H), DepthCoord, Y); safeView = View; }
+            if (!Grounded || !Solid(Cell(H), Cell(Y - 0.05f))) return;
+            safeWorld = Views.ToWorld(View, Mathf.Round(H), DepthCoord, Y); safeView = View;
         }
 
         void Respawn()
@@ -180,18 +166,32 @@ namespace BeyondReality
 
         // ------------------------------------------------------------ view rotation
 
-        /// <summary>Re-express the player's position in another view. Fails if they'd end up inside a projected block.</summary>
+        /// <summary>
+        /// Re-express the player's position in another view. The new depth slice is the voxel column
+        /// the player occupies now: the centre column first, else an edge column that has ground under it.
+        /// Fails only if the player would end up inside a block of the new slice.
+        /// </summary>
         public bool TryEnterView(int newView)
         {
             newView = Views.Wrap(newView);
-            Vector3 wp = Views.ToWorld(View, H, DepthCoord, 0f);
-            float nh = Views.H(newView, wp);
-            int nd = Mathf.RoundToInt(Views.Depth(newView, wp));
-            if (Overlaps(newView, nh, Y)) return false;
+            int row = Cell(Y - 0.05f);
+            int c0 = Cell(H), c1 = Cell(H - HalfWidth + Eps), c2 = Cell(H + HalfWidth - Eps);
+            int fallback = int.MinValue; float fallbackH = 0f, bestH = 0f;
+            int best = int.MinValue;
+            foreach (int col in new[] { c0, c1, c2 })
+            {
+                Vector3 wp = Views.ToWorld(View, col, DepthCoord, 0f);
+                float nh = Mathf.Round(Views.H(newView, wp));
+                int nd = Mathf.RoundToInt(Views.Depth(newView, wp));
+                if (Overlaps(newView, nh, nd, Y)) continue;
+                if (fallback == int.MinValue) { fallback = nd; fallbackH = nh; }
+                if (SolidIn(newView, Mathf.RoundToInt(nh), nd, row)) { best = nd; bestH = nh; break; }
+            }
+            if (best == int.MinValue) { best = fallback; bestH = fallbackH; }
+            if (best == int.MinValue) return false;
 
-            View = newView; H = nh; DepthCoord = nd;
+            View = newView; H = bestH; DepthCoord = best;
             vel.x = 0f;
-            ResolveDepth();
             return true;
         }
 
@@ -214,14 +214,11 @@ namespace BeyondReality
             eye.GetComponent<MeshRenderer>().sharedMaterial = VoxelWorld.MakeMaterial(new Color(0.1f, 0.08f, 0.15f));
         }
 
-        /// <summary>
-        /// Orthographic trick: push the visual toward the camera along its forward axis.
-        /// Screen position stays identical, but the player is always drawn in front of the world.
-        /// </summary>
+        /// <summary>The player is drawn at its true position inside the level (the camera shows only its slice).</summary>
         public void UpdateVisual(Camera cam)
         {
             Vector3 f = cam.transform.forward, r = cam.transform.right, u = cam.transform.up;
-            Vector3 pos = TruePosition - f * 25f;
+            Vector3 pos = TruePosition;
             transform.position = pos;
             transform.rotation = Quaternion.LookRotation(f, Vector3.up);
             eye.position = pos + r * (facing * 0.14f) + u * 0.22f - f * (HalfWidth + 0.02f);

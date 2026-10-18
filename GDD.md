@@ -25,31 +25,32 @@ Wydaje Ci się, że to płaska platformówka 2D. W rzeczywistości świat jest t
 
 ### 3.1 Widok i rzut
 - Kamera ortograficzna patrzy w jednym z 4 kierunków: Północ, Wschód, Południe, Zachód.
-- Świat 3D jest **spłaszczany**: komórka 2D jest pełna, jeśli na osi głębokości leży w niej jakikolwiek voxel.
+- Widać tylko **jedną warstwę** świata: plaster voxeli na głębokości gracza (kamera tnie resztę clip planes). Gracz jest fizycznie w tej warstwie.
 - Gracz porusza się **tylko równolegle do płaszczyzny ekranu**. Żeby przejść „w głąb”, trzeba obrócić świat.
 
 ### 3.2 Obrót świata
 - Q/E obraca o 90° (animacja ok. 0,4 s z lekkim pochyleniem kamery, które na moment pokazuje świat w 3D).
 - Obrót jest możliwy tylko, gdy gracz stoi na ziemi.
-- Obrót jest blokowany (wstrząs kamery), jeśli w nowym widoku gracz znalazłby się wewnątrz bloku.
+- Po obrocie gracz trafia do warstwy wyznaczonej przez kolumnę, w której stoi. Obrót jest blokowany (wstrząs kamery) tylko, gdyby gracz znalazł się wewnątrz bloku.
 
-### 3.3 Głębokość (trik FEZ)
-- Głębokość gracza jest niewidoczna. Gdy gracz staje na bloku, przenosi się w głąb na voxel, który faktycznie ma pod stopami: najpierw zostaje na obecnej głębokości, a jeśli tam nic nie ma, trafia na voxel najbliższy kamerze.
-- Dzięki temu dwie platformy, które w jednym widoku tylko **wyglądają** na połączone, są połączone naprawdę. To podstawowy budulec zagadek.
+### 3.3 Głębokość (warstwy – inaczej niż w FEZ)
+- Gracz wchodzi w interakcję **tylko z obiektami na tej samej głębokości**. Bloki przed nim i za nim nie istnieją: nie da się na nich stanąć, nie blokują ruchu i nie są rysowane.
+- Głębokość zmienia się wyłącznie przez obrót. Zagadki polegają na wyborze miejsca obrotu: z którego miejsca obrócić świat, żeby trafić do warstwy z właściwą drogą.
 
 ### 3.4 Ruch
-- Bieg 5,5 bloku/s. Skok o zmiennej wysokości, maksymalnie ok. 2,4 bloku.
+- Bieg 5,5 bloku/s. Skok o zmiennej wysokości, maksymalnie ok. 3,2 bloku.
 - Coyote time (0,08 s) i bufor skoku (0,12 s).
 - Gwarantowane możliwości, na których opiera się projekt poziomów:
-  - wejście o 1 blok w górę,
-  - skok +1 w górę z przesunięciem o 2 kolumny,
-  - skok +2 w górę z przesunięciem o 1 kolumnę,
-  - przejście tunelem wysokim na 1 blok.
+  - skok +3 w górę z przesunięciem o 1 kolumnę,
+  - skok +2 w górę z przesunięciem o 2 kolumny,
+  - skok +1 w górę z przesunięciem o 3 kolumny,
+  - przeskok nad 2-kolumnową dziurą na tej samej wysokości,
+  - przejście tunelem wysokim na 1 blok (każdy skok potrzebuje 1 wolnego rzędu ponad wysokością lądowania).
 - Upadek poza świat powoduje respawn w ostatnim bezpiecznym miejscu.
 
 ### 3.5 Monety
 - Jest 10 monet, rozmieszczonych w świecie 3D.
-- Moneta zostaje zebrana, gdy **na ekranie** pokrywa się z graczem, niezależnie od głębokości.
+- Moneta zostaje zebrana, gdy jest w warstwie gracza i pokrywa się z nim na ekranie.
 - Monety mogą być zasłonięte geometrią, a odkrywa się je obracając świat.
 
 ## 4. Sterowanie
@@ -65,12 +66,12 @@ Do zrobienia: obsługa pada (lewa gałka, A, bumpery).
 
 ## 5. Projekt poziomu
 
-- Obecny poziom demo ma 12×13×12 voxeli i 21 prostopadłościanów.
+- Obecny poziom demo ma 20×20×20 voxeli i 19 prostopadłościanów: kładki biegnące wzdłuż x (widać je z północy/południa) albo wzdłuż z (ze wschodu/zachodu) i centralna wieża. Monety wymagają kolejno 1–9 obrotów.
 - Zasady:
   - Każda moneta wymaga co najmniej jednego obrotu.
   - Uczymy stopniowo: najpierw monety wymagające 1 obrotu, potem 2–3.
   - Wysoka centralna wieża daje orientację w przestrzeni.
-  - Unikamy bloków na wysokości gracza wzdłuż długich linii, bo blokują one obrót.
+  - Obrót w miejscu skrzyżowania kładek przełącza między nimi. Elementy z innych warstw widać tylko w trakcie obrotu, więc ukryte półki można pokazać „z daleka” (np. półka nad startem).
 - **Każda zmiana poziomu musi przejść `python Tools/level_solver.py`.** Solver sprawdza osiągalność i liczbę wymaganych obrotów.
 
 ## 6. Oprawa
@@ -97,7 +98,7 @@ Do zrobienia: obsługa pada (lewa gałka, A, bumpery).
 
 ## 9. Zakres i priorytety
 
-**Must have (zrobione):** świat voxeli, rzut 2D, obrót, fizyka platformówki, trik głębokości, 10 monet, wygrana, restart.
+**Must have (zrobione):** świat voxeli, widok jednej warstwy, obrót, fizyka platformówki, 10 monet, wygrana, restart.
 
 **Should have:**
 1. Dźwięki i muzyka.
@@ -118,5 +119,5 @@ Do zrobienia: obsługa pada (lewa gałka, A, bumpery).
 ## 10. Ryzyka
 
 - **Frustracja „gdzie teraz?”:** kompas, lepsza widoczność monet, podpowiedź po X sekundach bez postępu.
-- **Niejasna reguła głębokości:** krótka animacja lub efekt przy przeskoku głębokości.
+- **Niejasna reguła warstw:** gracz nie wie, do której warstwy trafi po obrocie. Podgląd warstwy docelowej lub efekt przy obrocie.
 - **WebGL:** shadery tworzone w kodzie mogą zostać wycięte przy buildzie. Trzeba dodać `Universal Render Pipeline/Lit` do Always Included Shaders.

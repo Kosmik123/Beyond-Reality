@@ -136,7 +136,7 @@ namespace BeyondReality
             }
         }
 
-        /// <summary>FEZ rule: a coin is collected when it overlaps the player on screen, regardless of depth.</summary>
+        /// <summary>A coin is collected when it is in the player's depth slice and overlaps the player on screen.</summary>
         void CollectCoins()
         {
             int v = player.View;
@@ -145,7 +145,7 @@ namespace BeyondReality
             {
                 if (!coins[i].gameObject.activeSelf) continue;
                 var c = coinCells[i];
-                if (Mathf.Abs(Views.H(v, c) - ph) < coinPickupRadius && Mathf.Abs(c.y - pc) < coinPickupRadius + 0.1f)
+                if (Views.Depth(v, c) == player.DepthCoord && Mathf.Abs(Views.H(v, c) - ph) < coinPickupRadius && Mathf.Abs(c.y - pc) < coinPickupRadius + 0.1f)
                 {
                     coins[i].gameObject.SetActive(false);
                     collected++;

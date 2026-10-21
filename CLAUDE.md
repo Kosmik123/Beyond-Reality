@@ -42,7 +42,7 @@ Cała gra buduje się w runtime. `Game.AutoBootstrap` tworzy obiekt `Game` w ka�
 - **Po każdej zmianie `Level.cs` albo parametrów ruchu** (`jumpApex`, `moveSpeed`, `gravity`, wymiary AABB) uruchom `python Tools/level_solver.py`. Wszystkie monety muszą być osiągalne.
   - Model ruchu w solverze (`JUMPS`) musi pozostać **konserwatywny** względem prawdziwej fizyki. Jeśli osłabiasz skok, zaktualizuj `JUMPS`.
 - **Input:** obsługuj oba systemy przez `#if ENABLE_INPUT_SYSTEM` (wzorzec jest w `Game.cs`).
-- **Materiały:** twórz przez `VoxelWorld.MakeMaterial` (obsługuje URP i Built-in). Przed buildem WebGL dodaj `Universal Render Pipeline/Lit` do Graphics → Always Included Shaders.
+- **Materiały:** twórz przez `VoxelWorld.MakeMaterial` (obsługuje URP i Built-in). Kopiuje szablony z `Assets/Resources/BeyondReality` (`VoxelLit`, `VoxelLitEmissive`), dzięki czemu shader URP Lit i wariant `_EMISSION` trafiają do buildu. Samo `Shader.Find` zwraca w buildzie null. Nowy wariant shadera (np. przezroczystość) wymaga nowego szablonu.
 - **Teksty UI** są po polsku.
 - **Nie mam Unity w CLI:** po zmianach poproś użytkownika o uruchomienie Play i wklejenie błędów z konsoli. Pliki `.meta` generuje Unity, więc nie twórz ich ręcznie.
 - **Commity:** małe, opisowe, po polsku.

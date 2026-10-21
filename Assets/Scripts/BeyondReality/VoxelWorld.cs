@@ -58,12 +58,25 @@ namespace BeyondReality
             return root;
         }
 
+        /// <summary>
+        /// Copies a template material from Resources/BeyondReality so the shader (and the _EMISSION variant)
+        /// is guaranteed to be in builds; Shader.Find alone returns null there because nothing references it.
+        /// </summary>
         public static Material MakeMaterial(Color c, bool emissive = false)
         {
             bool srp = GraphicsSettings.currentRenderPipeline != null;
-            Shader shader = srp ? Shader.Find("Universal Render Pipeline/Lit") : Shader.Find("Standard");
-            if (shader == null) shader = Shader.Find("Unlit/Color");
-            var m = new Material(shader) { color = c };
+            Material m = null;
+            var template = srp ? Resources.Load<Material>(emissive ? "BeyondReality/VoxelLitEmissive" : "BeyondReality/VoxelLit") : null;
+            if (template != null) m = new Material(template);
+            else
+            {
+                Shader shader = srp ? Shader.Find("Universal Render Pipeline/Lit") : Shader.Find("Standard");
+                if (shader == null) shader = Shader.Find("Unlit/Color");
+                if (shader == null) shader = Shader.Find("Hidden/InternalErrorShader");
+                if (shader == null) { Debug.LogError("Beyond Reality: brak shadera dla materiału voxeli."); return null; }
+                m = new Material(shader);
+            }
+            m.color = c;
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
             if (emissive && m.HasProperty("_EmissionColor"))
             {

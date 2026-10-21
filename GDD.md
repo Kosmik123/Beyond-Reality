@@ -120,4 +120,4 @@ Do zrobienia: obsługa pada (lewa gałka, A, bumpery).
 
 - **Frustracja „gdzie teraz?”:** kompas, lepsza widoczność monet, podpowiedź po X sekundach bez postępu.
 - **Niejasna reguła warstw:** gracz nie wie, do której warstwy trafi po obrocie. Podgląd warstwy docelowej lub efekt przy obrocie.
-- **WebGL:** shadery tworzone w kodzie mogą zostać wycięte przy buildzie. Trzeba dodać `Universal Render Pipeline/Lit` do Always Included Shaders.
+- **Build:** shadery szukane w kodzie są wycinane z buildu. Rozwiązane szablonami materiałów w `Assets/Resources/BeyondReality`.
